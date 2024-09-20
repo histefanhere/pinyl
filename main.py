@@ -7,12 +7,12 @@ from dotenv import load_dotenv
 import os
 from time import sleep
 from gpiozero import Button, TonalBuzzer
-from RPi.GPIO import cleanup
-from mfrc522 import SimpleMFRC522
+
+import rfid_readers
 
 load_dotenv()
 
-reader = SimpleMFRC522()
+reader = rfid_readers.UIDFileReader()
 
 MODE = 'play'
 SAVE_DATA = ''
@@ -53,9 +53,8 @@ def main():
     
     while True:
         print("Waiting to scan...")
-        id, data = reader.read()
-        data = data.strip()
-        print(f"Found card with ID {id}, data: {data}")
+        data = reader.read()
+        print(f"Found card with data: {data}")
         
         if MODE == 'play':
             buzzer.play('C4')
@@ -80,7 +79,8 @@ def main():
                 return
             SAVE_DATA = playing['context']['uri']
             
-            id, data = reader.write(SAVE_DATA)
+            print('press card')
+            reader.write(SAVE_DATA)
             print("Data saved!")
             MODE = 'play'
             
@@ -93,5 +93,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        cleanup()
+        reader.cleanup()
         print("Exiting...")
