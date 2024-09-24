@@ -11,6 +11,7 @@ import rfid_readers
 
 load_dotenv()
 
+
 class Buzzer:
     buzzer = None
     
@@ -45,71 +46,78 @@ class MyButton:
         Buzzer.beep('C5')
 
 
-reader = rfid_readers.UIDFileReader()
+class Pinyl:
+    def __init__(self):
+        self.sp: spotipy.Spotify = None
+        self.reader = rfid_readers.UIDFileReader()
 
-def main():
-    scope = "user-read-playback-state,user-modify-playback-state"
-    sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope=scope, open_browser=False))
-    
-    MyButton.init()
-    Buzzer.init()
-    
-    while True:
-        print("Waiting to scan...")
-        data = reader.read()
-        print(f"Found card with data: {data}")
+    def run(self):
+        self.sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope="user-read-playback-state,user-modify-playback-state", open_browser=False))
         
-        if not MyButton.pressed:
-            print("Playing data...")
-            if data.startswith('spotify'):
-                Buzzer.beep('C4')
-                
-                try:
-                    sp.start_playback(context_uri=data)
-                except spotipy.client.SpotifyException as e:
-                    if 'NO_ACTIVE_DEVICE' in str(e):
+        MyButton.init()
+        Buzzer.init()
 
-                        print('No active device found, playing on any online device...')
-                        devices = sp.devices()
-                        if len(devices['devices']) == 0:
-                            print('No devices found')
-                        else:
-                            device = devices['devices'][0]
-                            print(f"Playing on {device['name']} ({device['type']})")
-
-                            sp.start_playback(device_id=device['id'], context_uri=data)
-                    else:
-                        raise e
+        while True:
+            print("Waiting to scan...")
+            data = self.reader.read()
+            print(f"Found card with data: {data}")
+            
+            if not MyButton.pressed:
+                print("Playing data...")
+                if data.startswith('spotify'):
+                    self.play(data)
+                    
+                else:
+                    print(f"Invalid card data \"{data}\"")
+    
             else:
-                print(f"Invalid card data \"{data}\"")
+                self.save()
+            
+            MyButton.pressed = False
+            sleep(1)
+    
+    def play(self, uri):
+        Buzzer.beep('C4')
+        try:
+            self.sp.start_playback(context_uri=uri)
+        except spotipy.client.SpotifyException as e:
+            if 'NO_ACTIVE_DEVICE' in str(e):
 
-        else:
-            print("Saving data...")
-            
-            Buzzer.tone('C4')
-            
-            playing = sp.current_user_playing_track()
-            if playing['currently_playing_type'] != 'track':
-                print("Please play a track!")
-                return
-            if playing['context'] == None:
-                print("ERROR: No context")
-                return
-            
-            print('press card')
-            SAVE_DATA = playing['context']['uri']
-            reader.write(SAVE_DATA)
-            
-            print("Data saved!")
-            Buzzer.beep('C5')
+                print('No active device found, playing on any online device...')
+                devices = self.sp.devices()
+                if len(devices['devices']) == 0:
+                    print('No devices found')
+                else:
+                    device = devices['devices'][0]
+                    print(f"Playing on {device['name']} ({device['type']})")
+
+                    self.sp.start_playback(device_id=device['id'], context_uri=uri)
+            else:
+                raise e
+    
+    def save(self):
+        print("Saving data...")
+        Buzzer.tone('C4')
         
+        playing = self.sp.current_user_playing_track()
+        if playing['currently_playing_type'] != 'track':
+            print("Please play a track!")
+            return
+        if playing['context'] == None:
+            print("ERROR: No context")
+            return
         
-        MyButton.pressed = False
-        sleep(1)
+        print('press card')
+        self.reader.write(playing['context']['uri'])
+        
+        print("Data saved!")
+        Buzzer.beep('C5')
+
 
 if __name__ == "__main__":
     try:
-        main()
+        pinyl = Pinyl()
+        pinyl.run()
     except KeyboardInterrupt:
-        reader.cleanup()
+        pinyl.reader.cleanup()
         print("Exiting...")
