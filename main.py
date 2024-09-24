@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from signal import pause
@@ -24,29 +23,35 @@ class Buzzer:
         Buzzer.buzzer.play(note)
         sleep(0.2)
         Buzzer.buzzer.stop()
+    
+    @staticmethod
+    def tone(note):
+        Buzzer.buzzer.play(note)
+
+
+class MyButton:
+    button = None
+    pressed = False
+
+    @staticmethod
+    def init():
+        MyButton.button = Button(os.getenv("BUTTON_PIN"), bounce_time=0.2)
+        MyButton.button.when_pressed = MyButton.button_callback
+
+    @staticmethod
+    def button_callback():
+        print("Button was pushed!")
+        MyButton.pressed = True
+        Buzzer.beep('C5')
 
 
 reader = rfid_readers.UIDFileReader()
 
-MODE = 'play'
-
-
-def button_callback():
-    print("Button was pushed!")
-    global MODE
-    MODE = 'save'
-    Buzzer.beep('C5')
-
-
 def main():
-    global MODE
-
     scope = "user-read-playback-state,user-modify-playback-state"
     sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope=scope, open_browser=False))
     
-    button = Button(os.getenv("BUTTON_PIN"))
-    button.when_pressed = button_callback
-    
+    MyButton.init()
     Buzzer.init()
     
     while True:
@@ -54,7 +59,7 @@ def main():
         data = reader.read()
         print(f"Found card with data: {data}")
         
-        if MODE == 'play':
+        if not MyButton.pressed:
             print("Playing data...")
             if data.startswith('spotify'):
                 Buzzer.beep('C4')
@@ -78,8 +83,10 @@ def main():
             else:
                 print(f"Invalid card data \"{data}\"")
 
-        elif MODE == 'save':
+        else:
             print("Saving data...")
+            
+            Buzzer.tone('C4')
             
             playing = sp.current_user_playing_track()
             if playing['currently_playing_type'] != 'track':
@@ -96,7 +103,8 @@ def main():
             print("Data saved!")
             Buzzer.beep('C5')
         
-        MODE = 'play'
+        
+        MyButton.pressed = False
         sleep(1)
 
 if __name__ == "__main__":
