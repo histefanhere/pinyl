@@ -12,44 +12,42 @@ import rfid_readers
 
 load_dotenv()
 
+class Buzzer:
+    buzzer = None
+    
+    @staticmethod
+    def init():
+        Buzzer.buzzer = TonalBuzzer(os.getenv("BUZZER_PIN"))
+        
+    @staticmethod
+    def beep(note):
+        Buzzer.buzzer.play(note)
+        sleep(0.2)
+        Buzzer.buzzer.stop()
+
+
 reader = rfid_readers.UIDFileReader()
 
 MODE = 'play'
-SAVE_DATA = ''
+
 
 def button_callback():
     print("Button was pushed!")
-    
-    # playing = sp.current_user_playing_track()
-    # if playing['currently_playing_type'] != 'track':
-    #     print("Please play a track!")
-    #     return
-
-    # if playing['context'] == None:
-    #     print("ERROR: No context")
-    #     return
-
-    global MODE, SAVE_DATA
+    global MODE
     MODE = 'save'
-    # SAVE_DATA = playing['context']['uri']
-    
-    buzzer.play('B4')
-    sleep(0.2)
-    buzzer.stop()
+    Buzzer.beep('C5')
+
 
 def main():
-    global MODE, SAVE_DATA
-    
-    global sp
+    global MODE
+
     scope = "user-read-playback-state,user-modify-playback-state"
     sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope=scope, open_browser=False))
     
-    global button
     button = Button(os.getenv("BUTTON_PIN"))
     button.when_pressed = button_callback
     
-    global buzzer
-    buzzer = TonalBuzzer(os.getenv("BUZZER_PIN"))
+    Buzzer.init()
     
     while True:
         print("Waiting to scan...")
@@ -57,13 +55,26 @@ def main():
         print(f"Found card with data: {data}")
         
         if MODE == 'play':
-            buzzer.play('C4')
-            sleep(0.2)
-            buzzer.stop()
-        
             print("Playing data...")
             if data.startswith('spotify'):
-                sp.start_playback(context_uri=data)
+                Buzzer.beep('C4')
+                
+                try:
+                    sp.start_playback(context_uri=data)
+                except spotipy.client.SpotifyException as e:
+                    if 'NO_ACTIVE_DEVICE' in str(e):
+
+                        print('No active device found, playing on any online device...')
+                        devices = sp.devices()
+                        if len(devices['devices']) == 0:
+                            print('No devices found')
+                        else:
+                            device = devices['devices'][0]
+                            print(f"Playing on {device['name']} ({device['type']})")
+
+                            sp.start_playback(device_id=device['id'], context_uri=data)
+                    else:
+                        raise e
             else:
                 print(f"Invalid card data \"{data}\"")
 
@@ -77,17 +88,16 @@ def main():
             if playing['context'] == None:
                 print("ERROR: No context")
                 return
-            SAVE_DATA = playing['context']['uri']
             
             print('press card')
+            SAVE_DATA = playing['context']['uri']
             reader.write(SAVE_DATA)
-            print("Data saved!")
-            MODE = 'play'
             
-            buzzer.play('C5')
-            sleep(0.2)
-            buzzer.stop()
-            sleep(5)
+            print("Data saved!")
+            Buzzer.beep('C5')
+        
+        MODE = 'play'
+        sleep(1)
 
 if __name__ == "__main__":
     try:

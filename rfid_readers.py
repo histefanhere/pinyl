@@ -6,7 +6,7 @@ from RPi.GPIO import cleanup
 class UIDFileReader:
     """Relates cards to custom strings by reading their UIDs and via a lookup file."""
     def __init__(self):
-        self.rdr = RFID(pin_irq=8)
+        self.rdr = RFID(pin_irq=18)
         self.filename = 'db.yaml'
         
         # Load the UID lookup file
